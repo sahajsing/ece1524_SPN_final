@@ -40,7 +40,20 @@ header Ethernet_h {
 }
 
 // TODO: What other headers do you need to add support for?
-
+header IPv4_h {
+    bit<4>    version;
+    bit<4>    ihl;
+    bit<8>    diffserv;
+    bit<16>   totalLen;
+    bit<16>   identification;
+    bit<3>    flags;
+    bit<13>   fragOffset;
+    bit<8>    ttl;
+    bit<8>    protocol;
+    bit<16>   hdrChecksum;
+    IPv4Addr_t srcAddr;
+    IPv4Addr_t dstAddr;
+}
 /* Here we define a digest_header type. This header contains information
  * that we want to send to the control-plane. This header should be
  * prepended to all packets sent to the control-plane.
@@ -54,6 +67,7 @@ header digest_header_h {
 // List of all recognized headers
 struct Parsed_packet {
     Ethernet_h ethernet;
+    IPv4_h ipv4;
     digest_header_h digest;
 }
 
@@ -70,13 +84,39 @@ parser MyParser(packet_in b,
     // TODO: Parse any additional headers that you add
     state start {
         b.extract(p.ethernet);
+        transition select(p.ethernet.etherType){
+            IP_TYPE : parse_ipv4;
+            // ARP_TYPE : parse_arp;
+            default : accept;
+        }
+    }
+    
+    state parse_ipv4 {
+        b.extract(p.ipv4);
         transition accept;
     }
+
+    // state parse_arp {
+
+    // }
 }
 
 control MyVerifyChecksum(inout Parsed_packet p, inout user_metadata_t meta) {
     apply {
         // TODO: Verify the IPv4 checksum
+        verify_checksum(p.ipv4.isValid(),
+            { hdr.ipv4.version,
+                hdr.ipv4.ihl,
+                hdr.ipv4.diffserv,
+                hdr.ipv4.totalLen,
+                hdr.ipv4.identification,
+                hdr.ipv4.flags,
+                hdr.ipv4.fragOffset,
+                hdr.ipv4.ttl,
+                hdr.ipv4.protocol,
+                hdr.ipv4.srcAddr,
+                hdr.ipv4.dstAddr},
+            hdr.ipv4.hdrChecksum, HashAlgorithm.csum16);
     }
 }
 
@@ -118,6 +158,7 @@ control MyDeparser(packet_out b,
         // TODO: Emit other headers you've defined
         b.emit(p.digest);
         b.emit(p.ethernet);
+        b.emit(p.ipv4)
     }
 }
 
@@ -130,6 +171,21 @@ control MyEgress(inout Parsed_packet hdr,
 control MyComputeChecksum(inout Parsed_packet hdr, inout user_metadata_t meta) {
     apply {
         // TODO: compute the IPv4 checksum
+        update_checksum(
+            hdr.ipv4.isValid(),
+            { hdr.ipv4.version,
+              hdr.ipv4.ihl,
+              hdr.ipv4.diffserv,
+              hdr.ipv4.totalLen,
+              hdr.ipv4.identification,
+              hdr.ipv4.flags,
+              hdr.ipv4.fragOffset,
+              hdr.ipv4.ttl,
+              hdr.ipv4.protocol,
+              hdr.ipv4.srcAddr,
+              hdr.ipv4.dstAddr },
+            hdr.ipv4.hdrChecksum,
+            HashAlgorithm.csum16);
     }
 }
 
