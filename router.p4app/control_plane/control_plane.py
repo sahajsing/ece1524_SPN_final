@@ -90,7 +90,12 @@ class Control_plane(Thread):
         # TODO: handle the packet appropriately
         DIG_CODE = pkt[Digest_data].digest_code
         if (DIG_CODE == DIG_LOCAL_IP):
-            # send the packet
+            # send the packet- do nothing, go to routing table
+            if ICMP in pkt:
+                # respond to ICMP echo request with echo reply
+                ICMP_pkt = icmp_pkt(self.rtable, self.ifaces, pkt, ICMP_ECHO_REPLY_TYPE, ICMP_NET_UNREACH_CODE)
+                self.sendp(ICMP_pkt)
+                return
             self.sendp(pkt)
             return
         
@@ -99,19 +104,17 @@ class Control_plane(Thread):
             return
         
         elif (DIG_CODE == DIG_TTL_EXCEEDED):
-            # drop packet 
-            return
+            # send ICMP time exceeded msg 
+            ICMP_pkt = icmp_pkt(self.rtable, self.ifaces,pkt, ICMP_TIME_EXCEEDED_TYPE, ICMP_NET_UNREACH_CODE)
+            self.sendp(ICMP_pkt)
         
         elif(DIG_CODE == DIG_ARP_MISS):
-            # no ARP match found for IP packet 
-            return
+            # no ARP match found for IP packet - make arp request 
+            self.arp_cache.handle_ARP_REQUEST(pkt)
 
         elif(DIG_CODE == DIG_ARP_REPLY):
             # reply ARP request by looking into ARP cache
-            return
+            self.arp_cache.handle_ARP_REPLY(pkt)
 
         else: 
             return
-        # ***** HANDLE ARP / POPULATING ARP CACHE ***** #
-        if pkt[Ether].type == 0x0806:
-            if pkt[ARP].op

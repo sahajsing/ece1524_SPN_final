@@ -249,22 +249,22 @@ control MyIngress(inout Parsed_packet hdr,
 
     //***** ARP *****//
 
-    action arp_match(EthAddr_t dstMacAddr){
-        next_hop_mac_addr = dstMacAddr;
-    }
+    // action arp_match(EthAddr_t dstMacAddr){
+    //     next_hop_mac_addr = dstMacAddr;
+    // }
 
-    table arp_table {
-        key = {
-            next_hop_ip_addr: exact;
-            //hdr.ipv4.dstAddr: exact;
-        }
-        actions = {
-            arp_match;
-            NoAction;
-        }
-        size = 64;
-        default_action = NoAction();
-    }
+    // table arp_table {
+    //     key = {
+    //         next_hop_ip_addr: exact;
+    //         //hdr.ipv4.dstAddr: exact;
+    //     }
+    //     actions = {
+    //         arp_match;
+    //         NoAction;
+    //     }
+    //     size = 64;
+    //     default_action = NoAction();
+    // }
 
     // table L2_forward {
     //     key = {
@@ -281,7 +281,7 @@ control MyIngress(inout Parsed_packet hdr,
 
 
 ////////////////////////////////////////////
-    action arp_reply(EtherAddr_t dstAddr) {
+    action arp_match(EtherAddr_t dstAddr) {
         hdr.arp.opCode = ARP_REPLY; // update op code, request to reply
         hdr.arp.dstMac = hdr.arp.srcMac; // reply ARP pkt destination = source addr
         hdr.arp.srcMac = dstAddr; // destination MAC address from request 
@@ -300,22 +300,17 @@ control MyIngress(inout Parsed_packet hdr,
         standard_metadata.egress_spec = port;
     }
 
-    // action arp_hit(EthAddr_t dstMacAddr) {
-    //     hdr.ethernet.dstAddr = dstMacAddr;
-    // }
-
     table arp_cache_table {
         key = {
             hdr.arp.dstIP : exact; // destination IP addr = key for finding matching MAC addr
         }
         actions = {
             arp_reply;
-            drop;
+            NoAction;
         }
         size = 1024;
-        default_action = drop();
+        default_action = NoAction();
     }
-
 
     table l2forward_exact {
         key = {
@@ -382,6 +377,7 @@ control MyIngress(inout Parsed_packet hdr,
             // } else if (hdr.arp.opCode == ARP_REQ) {
             //     // do something
             // }
+            }
         }
 
         else {
@@ -391,16 +387,16 @@ control MyIngress(inout Parsed_packet hdr,
 
     
     
-        if (hdr.ethernet.isValid() && hdr.ipv4.isValid()) {
-            l2forward_exact.apply(); // layer 2 switching - sending to port with destination mac
-        }
-        else if (hdr.ethernet.etherType == ARP_TYPE) {
-            arp_cache_table.apply();
-        }
-        else {
-            drop();
-        }
-        }
+        // if (hdr.ethernet.isValid() && hdr.ipv4.isValid()) {
+        //     l2forward_exact.apply(); // layer 2 switching - sending to port with destination mac
+        // }
+        // else if (hdr.ethernet.etherType == ARP_TYPE) {
+        //     arp_cache_table.apply();
+        // }
+        // else {
+        //     drop();
+        // }
+        
     }
 }
 
