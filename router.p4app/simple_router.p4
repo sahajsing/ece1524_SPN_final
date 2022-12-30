@@ -307,32 +307,86 @@ control MyIngress(inout Parsed_packet p,
         //     send_to_cp();
         // }
 
-        if (p.ip.isValid()) {
-            if (!local_ip_table.apply().hit) {
-                // send_to_cpu(DIG_LOCAL_IP); // if address found in local ip table --> sent to CP
-                if (!routing_table.apply().hit){
+        // if (p.ip.isValid()) {
+        //     if (!local_ip_table.apply().hit) {
+        //         // send_to_cpu(DIG_LOCAL_IP); // if address found in local ip table --> sent to CP
+        //         if (!routing_table.apply().hit){
+        //             send_to_cpu(DIG_NO_ROUTE);
+        //         }
+        //     }
+        //     else {
+        //         if(!arp_cache_table.apply().hit) {
+        //             send_to_cpu(DIG_ARP_MISS); // check if no ARP match in local ARP Cache table
+        //         }
+        //         else {
+        //             p.ip.ttl = p.ip.ttl -1;
+        //             if (p.ip.ttl==0) {
+        //                 send_to_cpu(DIG_TTL_EXCEEDED);
+        //             }
+        //         }
+        //     }
+        // }
+
+        // else if(p.arp.isValid()) {
+        //     if (p.arp.opCode == ARP_REQ) {
+        //         send_to_cpu(DIG_ARP_REPLY);
+        //     }
+        // }
+
+        // else {
+        //     drop();
+
+    
+
+        // if (p.ip.isValid()) {
+        //     if (p.ip.ttl <= 1) {
+        //         drop();
+        //     }
+        //     else {
+        //         p.ip.ttl = p.ip.ttl - 1;
+        //     }
+        //     if(local_ip_table.apply().hit) {
+        //         send_to_cpu(DIG_LOCAL_IP);
+        //     }
+        //     else {
+        //         if (!routing_table.apply().hit){
+        //             send_to_cpu(DIG_NO_ROUTE);
+        //         }
+        //         else{
+        //             if (p)
+        //         }
+        //     }
+        //     if (standard_matadata.egress_spec != CPU_PORT){
+
+        //     }
+        // }
+        srcMac = p.ethernet.srcAddr;
+        dstMac = p.ethernet.dstAddr;
+        iport = standard_matadata.ingress_port;
+
+        if (p.ip.isValid()){
+            if(!local_ip_table.apply().hit){
+                if(!routing_table.apply().hit){
                     send_to_cpu(DIG_NO_ROUTE);
                 }
-            }
-            else {
-                if(!arp_cache_table.apply().hit) {
-                    send_to_cpu(DIG_ARP_MISS); // check if no ARP match in local ARP Cache table
-                }
                 else {
-                    p.ip.ttl = p.ip.ttl -1;
-                    if (p.ip.ttl==0) {
-                        send_to_cpu(DIG_TTL_EXCEEDED);
+                    if (!arp_cache_table.apply().hit) {
+                        send_to_cpu(DIG_ARP_MISS);
+                    }
+                    else {
+                        p.ip.ttl = p.ip.ttl - 1;
+                        if (p.ip.ttl == 0) {
+                            send_to_cpu(DIG_TTL_EXCEEDED);
+                        }
                     }
                 }
             }
         }
-
-        else if(p.arp.isValid()) {
-            if (p.arp.opCode == ARP_REQ) {
+        else if (p.arp.isValid()) {
+            if (hdr.arp.opCode == ARP_OPER_REPLY) {
                 send_to_cpu(DIG_ARP_REPLY);
             }
         }
-
         else {
             drop();
         }

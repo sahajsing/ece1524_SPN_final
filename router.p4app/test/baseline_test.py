@@ -93,6 +93,7 @@ class PortTester():
             assert expPort in out, "expecting packet on port %d, but got: %s" % (expPort, out)
             assert len(out[expPort]) == 1, "expecting a single packet on port %d, but got %d: %s" % (expPort, len(out), out)
             outPkt = out[expPort][0]
+            print('-------------------------')
             print(outPkt)
             print('-------------------------')
             print(expPkt)
