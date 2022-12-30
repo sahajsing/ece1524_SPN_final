@@ -360,9 +360,9 @@ control MyIngress(inout Parsed_packet p,
 
         //     }
         // }
-        srcMac = p.ethernet.srcAddr;
-        dstMac = p.ethernet.dstAddr;
-        iport = standard_matadata.ingress_port;
+        // srcMac = p.ethernet.srcAddr;
+        // dstMac = p.ethernet.dstAddr;
+        // iport = standard_matadata.ingress_port;
 
         if (p.ip.isValid()){
             if(!local_ip_table.apply().hit){
