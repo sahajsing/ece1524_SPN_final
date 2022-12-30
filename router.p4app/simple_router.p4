@@ -212,7 +212,7 @@ control MyIngress(inout Parsed_packet p,
     
     table routing_table {
         key = {
-            p.ip.dstAddr: lpm; // ternary?
+            p.ip.dstAddr: ternary; // ternary?
         }
         actions = {
             ipv4_forward;
