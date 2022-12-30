@@ -94,7 +94,10 @@ class PortTester():
             assert len(out[expPort]) == 1, "expecting a single packet on port %d, but got %d: %s" % (expPort, len(out), out)
             outPkt = out[expPort][0]
             print(outPkt)
+            print('-------------------------')
             print(expPkt)
+            print('-------------------------')
+            print(str(outPkt) == str(expPkt))
             assert str(outPkt) == str(expPkt)
         else:
             time.sleep(self.timeout)
