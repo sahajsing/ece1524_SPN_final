@@ -121,16 +121,16 @@ parser MyParser(packet_in pkt,
         pkt.extract(hdr.ethernet);
         transition select(hdr.ethernet.etherType){
             ARP_TYPE : parse_arp;
-            DIGEST_TYPE : parse_digest;
+            // DIGEST_TYPE : parse_digest;
             IP_TYPE : parse_ipv4;
             default : accept;
         }
     }
 
-    state parse_digest {
-        pkt.extract(hdr.digest);
-        transition accept;
-    }
+    // state parse_digest {
+    //     pkt.extract(hdr.digest);
+    //     transition accept;
+    // }
     
     state parse_arp {
         pkt.extract(hdr.arp);
@@ -153,7 +153,7 @@ parser MyParser(packet_in pkt,
 control MyVerifyChecksum(inout Parsed_packet hdr, inout user_metadata_t meta) {
     apply {
         // TODO: Verify the IPv4 checksum
-        verify_checksum(p.ipv4.isValid(),
+        verify_checksum(hdr.ipv4.isValid(),
             { hdr.ipv4.version,
                 hdr.ipv4.ihl,
                 hdr.ipv4.diffserv,
@@ -244,7 +244,7 @@ control MyIngress(inout Parsed_packet hdr,
     }
 
     action set_egr_spec(port_t port){
-        standard.metadata.egress_spec = port;
+        standard_metadata.egress_spec = port;
     }
 
     //***** ARP *****//
@@ -299,13 +299,13 @@ control MyIngress(inout Parsed_packet hdr,
     action l2_forward(port_t port) {
         standard_metadata.egress_spec = port;
     }
-    
+
     table arp_cache_table {
         key = {
             hdr.arp.dstIP : exact; // destination IP addr = key for finding matching MAC addr
         }
         actions = {
-            arp_reply;
+            arp_match;
             NoAction;
         }
         size = 1024;
