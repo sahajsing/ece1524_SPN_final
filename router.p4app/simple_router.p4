@@ -296,10 +296,10 @@ control MyIngress(inout Parsed_packet hdr,
 
     }
 
-    action l2_forward(egressSpec_t port) {
+    action l2_forward(port_t port) {
         standard_metadata.egress_spec = port;
     }
-
+    
     table arp_cache_table {
         key = {
             hdr.arp.dstIP : exact; // destination IP addr = key for finding matching MAC addr
