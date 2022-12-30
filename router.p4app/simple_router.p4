@@ -383,7 +383,7 @@ control MyIngress(inout Parsed_packet p,
             }
         }
         else if (p.arp.isValid()) {
-            if (p.arp.opCode == ARP_OPER_REPLY) {
+            if (p.arp.opCode == ARP_REPLY) {
                 send_to_cpu(DIG_ARP_REPLY);
             }
         }
