@@ -281,7 +281,7 @@ control MyIngress(inout Parsed_packet hdr,
 
 
 ////////////////////////////////////////////
-    action arp_match(EtherAddr_t dstAddr) {
+    action arp_match(EthAddr_t dstAddr) {
         hdr.arp.opCode = ARP_REPLY; // update op code, request to reply
         hdr.arp.dstMac = hdr.arp.srcMac; // reply ARP pkt destination = source addr
         hdr.arp.srcMac = dstAddr; // destination MAC address from request 
