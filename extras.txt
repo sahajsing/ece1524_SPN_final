@@ -250,6 +250,39 @@ control MyIngress(inout Parsed_packet p,
         standard_metadata.egress_spec = port;
     }
 
+    //***** ARP *****//
+
+    // action arp_match(EthAddr_t dstMacAddr){
+    //     next_hop_mac_addr = dstMacAddr;
+    // }
+
+    // table arp_table {
+    //     key = {
+    //         next_hop_ip_addr: exact;
+    //         //p.ip.dstAddr: exact;
+    //     }
+    //     actions = {
+    //         arp_match;
+    //         NoAction;
+    //     }
+    //     size = 64;
+    //     default_action = NoAction();
+    // }
+
+    // table L2_forward {
+    //     key = {
+    //         p.ethernet.dstAddr: exact;
+    //     }
+    //     actions = {
+    //         set_egr_spec;
+    //         drop;
+    //         NoAction;
+    //     }
+    //     size = 64;
+    //     default_action = drop();
+    // }
+
+
 ////////////////////////////////////////////
     action arp_match(EthAddr_t dstAddr) {
         p.arp.opCode = ARP_REPLY; // update op code, request to reply
@@ -266,7 +299,9 @@ control MyIngress(inout Parsed_packet p,
 
     }
 
-
+    action l2_forward(port_t port) {
+        standard_metadata.egress_spec = port;
+    }
 
     table arp_cache_table {
         key = {
@@ -280,6 +315,18 @@ control MyIngress(inout Parsed_packet p,
         default_action = NoAction();
     }
 
+    table l2forward_exact {
+        key = {
+            p.ethernet.dstAddr: exact;
+        }
+        actions = {
+            l2_forward;
+            drop;
+            NoAction;
+        }
+        size = 1024;
+        default_action = NoAction();
+    }
 
     apply {
         // TODO: Define your control flow
@@ -309,10 +356,10 @@ control MyIngress(inout Parsed_packet p,
 
         if (p.ip.isValid()) {
             if (!local_ip_table.apply().hit) {
-                // send_to_cpu(DIG_LOCAL_IP); // if address found in local ip table --> sent to CP
-                if (!routing_table.apply().hit){
-                    send_to_cpu(DIG_NO_ROUTE);
-                }
+                send_to_cpu(DIG_LOCAL_IP); // if address found in local ip table --> sent to CP
+            }
+            else if(!routing_table.apply().hit) {
+                send_to_cpu(DIG_NO_ROUTE); // if route not found in routing table
             }
             else {
                 if(!arp_cache_table.apply().hit) {
@@ -330,12 +377,29 @@ control MyIngress(inout Parsed_packet p,
         else if(p.arp.isValid()) {
             if (p.arp.opCode == ARP_REQ) {
                 send_to_cpu(DIG_ARP_REPLY);
+            // } else if (p.arp.opCode == ARP_REQ) {
+            //     // do something
+            // }
             }
         }
 
         else {
             drop();
         }
+
+
+    
+    
+        // if (p.ethernet.isValid() && p.ip.isValid()) {
+        //     l2forward_exact.apply(); // layer 2 switching - sending to port with destination mac
+        // }
+        // else if (p.ethernet.etherType == ARP_TYPE) {
+        //     arp_cache_table.apply();
+        // }
+        // else {
+        //     drop();
+        // }
+        
     }
 }
 
