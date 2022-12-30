@@ -90,6 +90,11 @@ class PortTester():
             self.event_for_port[expPort].wait(self.timeout)
             out = self.newPkts()
             assert len(out) == 1, "expecting a single packet on port %d, but got %d: %s" % (expPort, len(out), out)
+            print('-------------------------')
+            print(expPort)
+            print('-------------------------')
+            print(out)
+            print('-------------------------')
             assert expPort in out, "expecting packet on port %d, but got: %s" % (expPort, out)
             assert len(out[expPort]) == 1, "expecting a single packet on port %d, but got %d: %s" % (expPort, len(out), out)
             outPkt = out[expPort][0]
