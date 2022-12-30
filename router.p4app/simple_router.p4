@@ -109,7 +109,7 @@ struct user_metadata_t {
 
 // Parser Implementation
 parser MyParser(packet_in pkt,
-                 out Parsed_packet hdr,
+                 out Parsed_packet p,
                  inout user_metadata_t user_metadata,
                  inout standard_metadata_t standard_metadata) {
     // TODO: Parse any additional headers that you add
@@ -118,8 +118,8 @@ parser MyParser(packet_in pkt,
     }
 
     state parse_ethernet {
-        pkt.extract(hdr.ethernet);
-        transition select(hdr.ethernet.etherType){
+        pkt.extract(p.ethernet);
+        transition select(p.ethernet.etherType){
             ARP_TYPE : parse_arp;
             // DIGEST_TYPE : parse_digest;
             IP_TYPE : parse_ipv4;
@@ -128,20 +128,20 @@ parser MyParser(packet_in pkt,
     }
 
     // state parse_digest {
-    //     pkt.extract(hdr.digest);
+    //     pkt.extract(p.digest);
     //     transition accept;
     // }
     
     state parse_arp {
-        pkt.extract(hdr.arp);
-        transition select(hdr.arp.opCode) {
+        pkt.extract(p.arp);
+        transition select(p.arp.opCode) {
             ARP_REQ: accept;
             ARP_REPLY: accept;
         }
     }    
 
     state parse_ipv4 {
-        pkt.extract(hdr.ipv4);
+        pkt.extract(p.ipv4);
         transition accept;
     }
 }
@@ -150,22 +150,22 @@ parser MyParser(packet_in pkt,
 ************   C H E C K S U M    V E R I F I C A T I O N   *************
 *************************************************************************/
 
-control MyVerifyChecksum(inout Parsed_packet hdr, inout user_metadata_t meta) {
+control MyVerifyChecksum(inout Parsed_packet p, inout user_metadata_t meta) {
     apply {
         // TODO: Verify the IPv4 checksum
-        verify_checksum(hdr.ipv4.isValid(),
-            { hdr.ipv4.version,
-                hdr.ipv4.ihl,
-                hdr.ipv4.diffserv,
-                hdr.ipv4.totalLen,
-                hdr.ipv4.identification,
-                hdr.ipv4.flags,
-                hdr.ipv4.fragOffset,
-                hdr.ipv4.ttl,
-                hdr.ipv4.protocol,
-                hdr.ipv4.srcAddr,
-                hdr.ipv4.dstAddr},
-            hdr.ipv4.hdrChecksum, HashAlgorithm.csum16);
+        verify_checksum(p.ipv4.isValid(),
+            { p.ipv4.version,
+                p.ipv4.ihl,
+                p.ipv4.diffserv,
+                p.ipv4.totalLen,
+                p.ipv4.identification,
+                p.ipv4.flags,
+                p.ipv4.fragOffset,
+                p.ipv4.ttl,
+                p.ipv4.protocol,
+                p.ipv4.srcAddr,
+                p.ipv4.dstAddr},
+            p.ipv4.hdrChecksum, HashAlgorithm.csum16);
     }
 }
 
@@ -174,7 +174,7 @@ control MyVerifyChecksum(inout Parsed_packet hdr, inout user_metadata_t meta) {
 *************************************************************************/
 
 // match-action pipeline
-control MyIngress(inout Parsed_packet hdr,
+control MyIngress(inout Parsed_packet p,
                 inout user_metadata_t user_metadata,
                   inout standard_metadata_t standard_metadata) {
 
@@ -190,9 +190,9 @@ control MyIngress(inout Parsed_packet hdr,
     }
 
     action send_to_cpu(digCode_t DIG_CODE){
-        hdr.digest.src_port = (bit<16>)standard_metadata.ingress_port; // source port is ingress port packet arrived on
+        p.digest.src_port = (bit<16>)standard_metadata.ingress_port; // source port is ingress port packet arrived on
         standard_metadata.egress_spec = CPU_PORT; // send to control plane
-        hdr.digest.digest_code = DIG_CODE;
+        p.digest.digest_code = DIG_CODE;
     }
 
     //*****  LAYER 3 *****// 
@@ -204,7 +204,7 @@ control MyIngress(inout Parsed_packet hdr,
     action ipv4_forward(port_t port, IPv4Addr_t next_hop) {
         // routing table action params = egress port, next hop addr
         standard_metadata.egress_spec = port;
-        // hdr.ipv4.dstAddr = next_hop;
+        // p.ipv4.dstAddr = next_hop;
         next_hop_ip_addr = next_hop;
     }
 
@@ -212,7 +212,7 @@ control MyIngress(inout Parsed_packet hdr,
     
     table routing_table {
         key = {
-            hdr.ipv4.dstAddr: lpm; // ternary?
+            p.ipv4.dstAddr: lpm; // ternary?
         }
         actions = {
             ipv4_forward;
@@ -225,7 +225,7 @@ control MyIngress(inout Parsed_packet hdr,
 
     table local_ip_table {
         key = {
-            hdr.ipv4.dstAddr: exact;
+            p.ipv4.dstAddr: exact;
         }
         actions = {
             NoAction; // hit or miss
@@ -239,8 +239,8 @@ control MyIngress(inout Parsed_packet hdr,
     //***** LAYER 2 *****//
 
     action set_mac_addrs() {
-        hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
-        hdr.ethernet.dstAddr = next_hop_mac_addr;
+        p.ethernet.srcAddr = p.ethernet.dstAddr;
+        p.ethernet.dstAddr = next_hop_mac_addr;
     }
 
     action set_egr_spec(port_t port){
@@ -256,7 +256,7 @@ control MyIngress(inout Parsed_packet hdr,
     // table arp_table {
     //     key = {
     //         next_hop_ip_addr: exact;
-    //         //hdr.ipv4.dstAddr: exact;
+    //         //p.ipv4.dstAddr: exact;
     //     }
     //     actions = {
     //         arp_match;
@@ -268,7 +268,7 @@ control MyIngress(inout Parsed_packet hdr,
 
     // table L2_forward {
     //     key = {
-    //         hdr.ethernet.dstAddr: exact;
+    //         p.ethernet.dstAddr: exact;
     //     }
     //     actions = {
     //         set_egr_spec;
@@ -282,14 +282,14 @@ control MyIngress(inout Parsed_packet hdr,
 
 ////////////////////////////////////////////
     action arp_match(EthAddr_t dstAddr) {
-        hdr.arp.opCode = ARP_REPLY; // update op code, request to reply
-        hdr.arp.dstMac = hdr.arp.srcMac; // reply ARP pkt destination = source addr
-        hdr.arp.srcMac = dstAddr; // destination MAC address from request 
-        hdr.arp.srcIP = hdr.arp.dstIP; //reply packet destination IP addr = request source IP addr
+        p.arp.opCode = ARP_REPLY; // update op code, request to reply
+        p.arp.dstMac = p.arp.srcMac; // reply ARP pkt destination = source addr
+        p.arp.srcMac = dstAddr; // destination MAC address from request 
+        p.arp.srcIP = p.arp.dstIP; //reply packet destination IP addr = request source IP addr
 
         // ethernet header updates
-        hdr.ethernet.dstAddr = hdr.ethernet.srcAddr;
-        hdr.ethernet.srcAddr = dstAddr;
+        p.ethernet.dstAddr = p.ethernet.srcAddr;
+        p.ethernet.srcAddr = dstAddr;
 
         // sending back to same port 
         standard_metadata.egress_spec = standard_metadata.ingress_port;
@@ -302,7 +302,7 @@ control MyIngress(inout Parsed_packet hdr,
 
     table arp_cache_table {
         key = {
-            hdr.arp.dstIP : exact; // destination IP addr = key for finding matching MAC addr
+            p.arp.dstIP : exact; // destination IP addr = key for finding matching MAC addr
         }
         actions = {
             arp_match;
@@ -314,7 +314,7 @@ control MyIngress(inout Parsed_packet hdr,
 
     table l2forward_exact {
         key = {
-            hdr.ethernet.dstAddr: exact;
+            p.ethernet.dstAddr: exact;
         }
         actions = {
             l2_forward;
@@ -329,12 +329,12 @@ control MyIngress(inout Parsed_packet hdr,
         // TODO: Define your control flow
         //routing_table.apply();
         
-        // if (hdr.ipv4.isValid()) {
-        //     if (hdr.ipv4.ttl <= 1) {
+        // if (p.ipv4.isValid()) {
+        //     if (p.ipv4.ttl <= 1) {
         //         drop();
         //     }
         //     else {
-        //         hdr.ipv4.ttl = hdr.ipv4.ttl -1;
+        //         p.ipv4.ttl = p.ipv4.ttl -1;
         //     }
         //     if(!local_ip_table.apply().hit) {
         //         routing_table.apply();
@@ -344,14 +344,14 @@ control MyIngress(inout Parsed_packet hdr,
         //         set_mac_addrs();
         //     }
         // }
-        // else if (hdr.ethernet.isValid()) {
+        // else if (p.ethernet.isValid()) {
         //     forward_L2.apply();
         // }
         // else {
         //     send_to_cp();
         // }
 
-        if (hdr.ipv4.isValid()) {
+        if (p.ipv4.isValid()) {
             if (local_ip_table.apply().hit) {
                 send_to_cpu(DIG_LOCAL_IP); // if address found in local ip table --> sent to CP
             }
@@ -363,18 +363,18 @@ control MyIngress(inout Parsed_packet hdr,
                     send_to_cpu(DIG_ARP_MISS); // check if no ARP match in local ARP Cache table
                 }
                 else {
-                    hdr.ipv4.ttl = hdr.ipv4.ttl -1;
-                    if (hdr.ipv4.ttl==0) {
+                    p.ipv4.ttl = p.ipv4.ttl -1;
+                    if (p.ipv4.ttl==0) {
                         send_to_cpu(DIG_TTL_EXCEEDED);
                     }
                 }
             }
         }
 
-        else if(hdr.arp.isValid()) {
-            if (hdr.arp.opCode == ARP_REQ) {
+        else if(p.arp.isValid()) {
+            if (p.arp.opCode == ARP_REQ) {
                 send_to_cpu(DIG_ARP_REPLY);
-            // } else if (hdr.arp.opCode == ARP_REQ) {
+            // } else if (p.arp.opCode == ARP_REQ) {
             //     // do something
             // }
             }
@@ -387,10 +387,10 @@ control MyIngress(inout Parsed_packet hdr,
 
     
     
-        // if (hdr.ethernet.isValid() && hdr.ipv4.isValid()) {
+        // if (p.ethernet.isValid() && p.ipv4.isValid()) {
         //     l2forward_exact.apply(); // layer 2 switching - sending to port with destination mac
         // }
-        // else if (hdr.ethernet.etherType == ARP_TYPE) {
+        // else if (p.ethernet.etherType == ARP_TYPE) {
         //     arp_cache_table.apply();
         // }
         // else {
@@ -406,13 +406,13 @@ control MyIngress(inout Parsed_packet hdr,
 
 // Deparser Implementation
 control MyDeparser(packet_out pkt,
-                    in Parsed_packet hdr) {
+                    in Parsed_packet p) {
     apply {
         // TODO: Emit other headers you've defined
-        pkt.emit(hdr.digest);
-        pkt.emit(hdr.ethernet);
-        pkt.emit(hdr.ipv4);
-        pkt.emit(hdr.arp);
+        pkt.emit(p.digest);
+        pkt.emit(p.ethernet);
+        pkt.emit(p.ipv4);
+        pkt.emit(p.arp);
     }
 }
 
@@ -420,7 +420,7 @@ control MyDeparser(packet_out pkt,
 ****************  E G R E S S   P R O C E S S I N G   *******************
 *************************************************************************/
 
-control MyEgress(inout Parsed_packet hdr,
+control MyEgress(inout Parsed_packet p,
                  inout user_metadata_t meta,
                  inout standard_metadata_t standard_metadata) {
     apply { }
@@ -430,23 +430,23 @@ control MyEgress(inout Parsed_packet hdr,
 *************   C H E C K S U M    C O M P U T A T I O N   **************
 *************************************************************************/
 
-control MyComputeChecksum(inout Parsed_packet hdr, inout user_metadata_t meta) {
+control MyComputeChecksum(inout Parsed_packet p, inout user_metadata_t meta) {
     apply {
         // TODO: compute the IPv4 checksum
         update_checksum(
-            hdr.ipv4.isValid(),
-            { hdr.ipv4.version,
-              hdr.ipv4.ihl,
-              hdr.ipv4.diffserv,
-              hdr.ipv4.totalLen,
-              hdr.ipv4.identification,
-              hdr.ipv4.flags,
-              hdr.ipv4.fragOffset,
-              hdr.ipv4.ttl,
-              hdr.ipv4.protocol,
-              hdr.ipv4.srcAddr,
-              hdr.ipv4.dstAddr },
-            hdr.ipv4.hdrChecksum,
+            p.ipv4.isValid(),
+            { p.ipv4.version,
+              p.ipv4.ihl,
+              p.ipv4.diffserv,
+              p.ipv4.totalLen,
+              p.ipv4.identification,
+              p.ipv4.flags,
+              p.ipv4.fragOffset,
+              p.ipv4.ttl,
+              p.ipv4.protocol,
+              p.ipv4.srcAddr,
+              p.ipv4.dstAddr },
+            p.ipv4.hdrChecksum,
             HashAlgorithm.csum16);
     }
 }
