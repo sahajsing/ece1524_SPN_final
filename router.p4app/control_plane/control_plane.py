@@ -91,7 +91,7 @@ class Control_plane(Thread):
         DIG_CODE = pkt[Digest_data].digest_code
         if (DIG_CODE == DIG_LOCAL_IP):
             # send the packet
-            self.sendp(pkt)  
+            self.sendp(pkt)
             return
         
         elif (DIG_CODE == DIG_NO_ROUTE):
