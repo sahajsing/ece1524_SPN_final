@@ -88,3 +88,30 @@ class Control_plane(Thread):
         # pkt is a Scapy packet with the format:
         #   Digest_data() / Ether() / ... payload ...
         # TODO: handle the packet appropriately
+        DIG_CODE = pkt[Digest_data].digest_code
+        if (DIG_CODE == DIG_LOCAL_IP):
+            # send the packet
+            self.sendp(pkt)  
+            return
+        
+        elif (DIG_CODE == DIG_NO_ROUTE):
+            # find route 
+            return
+        
+        elif (DIG_CODE == DIG_TTL_EXCEEDED):
+            # drop packet 
+            return
+        
+        elif(DIG_CODE == DIG_ARP_MISS):
+            # no ARP match found for IP packet 
+            return
+
+        elif(DIG_CODE == DIG_ARP_REPLY):
+            # reply ARP request by looking into ARP cache
+            return
+
+        else: 
+            return
+        # ***** HANDLE ARP / POPULATING ARP CACHE ***** #
+        if pkt[Ether].type == 0x0806:
+            if pkt[ARP].op

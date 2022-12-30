@@ -21,6 +21,7 @@ RTABLE_ACTION_NAME = 'MyIngress.ipv4_forward'
 # TODO: update with the name you use for your arp cache table
 ARP_CACHE_TABLE_NAME = 'MyIngress.arp_cache_table'
 
+LOCAL_IP_ADDR_TABLE_NAME = 'MyIngress.local_ip_table'
 # TODO: update these with the names of all of your longest-prefix-match and
 #       exact match hardware tables
 LPM_TABLE_NAMES = [RTABLE_NAME]
@@ -42,19 +43,31 @@ TODO: implement these dictionaries, or update the methods in Tables_api in
 # table from their string form to their integer form
 KEYS_TO_NUMERIC = {
     # E.g.
-    # ARP_CACHE_TABLE_NAME:
-    #    # arp_cache_table is keyed by an IP address
-    #    lambda keys: [ip_to_int(keys[0])],
+    ARP_CACHE_TABLE_NAME:
+       # arp_cache_table is keyed by an IP address
+       lambda keys: [ip_to_int(keys[0])],
+    LOCAL_IP_ADDR_TABLE_NAME:
+       # local ip address table is keyed by ip address
+       lambda keys: [ip_to_int(keys[0])]
 }
 
 # A dictionary from table name -> lambda function that converts the action data
 # for the table from string form to integer form
 DATA_TO_NUMERIC = {
+    ARP_CACHE_TABLE_NAME:
+       lambda keys: [mac_to_int(keys[0])],
+    LOCAL_IP_ADDR_TABLE_NAME:
+       lambda keys: [keys[0]]
 }
 
 # A dictionary from table name -> lambda function that converts the action data
 # for the table from integer form to string form
 NUMERIC_TO_DATA = {
+    ARP_CACHE_TABLE_NAME:
+       # arp_cache_table is keyed by an IP address
+       lambda keys: [int_to_mac(keys[0])],
+    LOCAL_IP_ADDR_TABLE_NAME:
+       lambda keys: [str(keys[0])]
 }
 
 # Mac address for broadcast packets

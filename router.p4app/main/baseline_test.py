@@ -12,4 +12,4 @@ s1 = net.get('s1')
 run_test(s1)
 
 # XXX Debugging: print table entries added during the test:
-#s1.printTableEntries()
+s1.printTableEntries()

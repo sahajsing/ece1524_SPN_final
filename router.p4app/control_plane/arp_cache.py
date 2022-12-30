@@ -32,12 +32,14 @@ class ARP_cache():
     @param config a Config object
     """
     def __init__(self, config):
-        self.tables_api = config.tables_api
-        self.ifaces = config.ifaces
-        self.sendp = config.sendp
-        self.rtable = config.rtable
+        self.tables_api = config.tables_api 
+        self.ifaces = config.ifaces # interfaces
+        self.sendp = config.sendp # sends packet
+        self.rtable = config.rtable # routing table
 
         # TODO: initialize ARP handling thread(s)?
+    def initialize_thread(self):
+        self.initialize_threa
         # TODO: define additional helper methods
         # One possible approach for handling the ARP cache is to define two
         # additional threads:

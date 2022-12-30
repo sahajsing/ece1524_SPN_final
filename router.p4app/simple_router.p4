@@ -20,10 +20,19 @@ typedef bit<32> IPv4Addr_t;
 
 const bit<16> IP_TYPE = 16w0x0800;
 const bit<16> ARP_TYPE = 16w0x0806;
+// const bit<16> DIGEST_TYPE = 16w0x080a;
 
 const bit<4> IPv4 = 4w0x4;
 
-const port_t CPU_PORT = 1;
+// ARP RELATED CONST VARS
+const bit<16> ARP_HTYPE = 0x0001; //Ethernet Hardware type is 1
+const bit<16> ARP_PTYPE = IP_TYPE; //Protocol used for ARP is IPV4
+const bit<8>  ARP_HLEN  = 6; //Ethernet address size is 6 bytes
+const bit<8>  ARP_PLEN  = 4; //IP address size is 4 bytes
+const bit<16> ARP_REQ = 1; //Operation 1 is request
+const bit<16> ARP_REPLY = 2; //Operation 2 is reply
+
+const port_t CPU_PORT = 1; // port for to control plane
 
 typedef bit<8> digCode_t;
 const digCode_t DIG_LOCAL_IP = 1;
@@ -31,6 +40,10 @@ const digCode_t DIG_ARP_MISS = 2;
 const digCode_t DIG_ARP_REPLY = 3;
 const digCode_t DIG_TTL_EXCEEDED = 4;
 const digCode_t DIG_NO_ROUTE = 5;
+
+/*************************************************************************
+*********************** H E A D E R S  ***********************************
+*************************************************************************/
 
 // standard Ethernet header
 header Ethernet_h {
@@ -40,6 +53,19 @@ header Ethernet_h {
 }
 
 // TODO: What other headers do you need to add support for?
+
+header ARP_h {
+    bit<16> hwType; // 1 for ethernet
+    bit<16> protoType; // protocol used in network layer = IPv4
+    bit<8> hwLen; //hw address length - 6 for ethernet
+    bit<8> protoLen; //proto length = IP address size = 4 bytes
+    bit<16> opCode; // operation code -> packet = ARP request (1) or ARP response (2)
+    EthAddr_t srcMac;
+    IPv4Addr_t srcIP;
+    EthAddr_t dstMac; // target hardware address
+    IPv4Addr_t dstIP; // target ip address
+}
+
 header IPv4_h {
     bit<4>    version;
     bit<4>    ihl;
@@ -67,8 +93,9 @@ header digest_header_h {
 // List of all recognized headers
 struct Parsed_packet {
     Ethernet_h ethernet;
-    IPv4_h ipv4;
     digest_header_h digest;
+    ARP_h arp;
+    IPv4_h ipv4;
 }
 
 // user defined metadata: can be used to shared information between
@@ -76,32 +103,54 @@ struct Parsed_packet {
 struct user_metadata_t {
 }
 
+/*************************************************************************
+*********************** P A R S E R  ***********************************
+*************************************************************************/
+
 // Parser Implementation
-parser MyParser(packet_in b,
-                 out Parsed_packet p,
+parser MyParser(packet_in pkt,
+                 out Parsed_packet hdr,
                  inout user_metadata_t user_metadata,
                  inout standard_metadata_t standard_metadata) {
     // TODO: Parse any additional headers that you add
     state start {
-        b.extract(p.ethernet);
-        transition select(p.ethernet.etherType){
+        tranistion parse_ethernet;
+    }
+
+    state parse_ethernet {
+        pkt.extract(hdr.ethernet);
+        transition select(hdr.ethernet.etherType){
+            ARP_TYPE : parse_arp;
+            DIGEST_TYPE : parse_digest;
             IP_TYPE : parse_ipv4;
-            // ARP_TYPE : parse_arp;
             default : accept;
         }
     }
-    
-    state parse_ipv4 {
-        b.extract(p.ipv4);
+
+    state parse_digest {
+        pkt.extract(hdr.digest);
         transition accept;
     }
+    
+    state parse_arp {
+        pkt.extract(hdr.arp);
+        transition select(hdr.arp.opCode) {
+            ARP_REQ: accept;
+            ARP_REPLY: accept;
+        }
+    }    
 
-    // state parse_arp {
-
-    // }
+    state parse_ipv4 {
+        pkt.extract(hdr.ipv4);
+        transition accept;
+    }
 }
 
-control MyVerifyChecksum(inout Parsed_packet p, inout user_metadata_t meta) {
+/*************************************************************************
+************   C H E C K S U M    V E R I F I C A T I O N   *************
+*************************************************************************/
+
+control MyVerifyChecksum(inout Parsed_packet hdr, inout user_metadata_t meta) {
     apply {
         // TODO: Verify the IPv4 checksum
         verify_checksum(p.ipv4.isValid(),
@@ -120,53 +169,270 @@ control MyVerifyChecksum(inout Parsed_packet p, inout user_metadata_t meta) {
     }
 }
 
+/*************************************************************************
+**************  I N G R E S S   P R O C E S S I N G   *******************
+*************************************************************************/
+
 // match-action pipeline
-control MyIngress(inout Parsed_packet p,
+control MyIngress(inout Parsed_packet hdr,
                 inout user_metadata_t user_metadata,
                   inout standard_metadata_t standard_metadata) {
 
+    //***** Next states *****//
+
+    IPv4Addr_t next_hop_ip_addr = 0;
+    EthAddr_t next_hop_mac_addr = 0;
+    port_t dstPort = 0;
+
     // TODO: Declare your actions and tables
+    action drop() {
+        mark_to_drop(standard_metadata);
+    }
+
+    action send_to_cpu(digCode_t DIG_CODE){
+        hdr.digest.src_port = standard_metadata.ingress_port; // source port is ingress port packet arrived on
+        standard_metadata.egress_spec = CPU_PORT; // send to control plane
+        hdr.digest.digest_code = DIG_CODE;
+    }
+
+    //*****  LAYER 3 *****// 
 
     action set_output_port(port_t port) {
         standard_metadata.egress_spec = port;
     }
 
-    // TODO: Is this what the routing table is supposed to look like?
-    table routing_table {
-        key = {
-            standard_metadata.ingress_port: exact;
-        }
-        actions = {
-            set_output_port;
-            NoAction;
-        }
-        size = 63;
-        default_action = NoAction;
+    action ipv4_forward(port_t port, IPv4Addr_t next_hop) {
+        // routing table action params = egress port, next hop addr
+        standard_metadata.egress_spec = port;
+        // hdr.ipv4.dstAddr = next_hop;
+        next_hop_ip_addr = next_hop;
     }
 
+    // TODO: Is this what the routing table is supposed to look like?
+    
+    table routing_table {
+        key = {
+            hdr.ipv4.dstAddr: lpm; // ternary?
+        }
+        actions = {
+            ipv4_forward;
+            // send_to_cpu;
+            NoAction;
+        }
+        size = 64;
+        default_action = NoAction();
+    }
+
+    table local_ip_table {
+        key = {
+            hdr.ipv4.dstAddr: exact;
+        }
+        actions = {
+            NoAction; // hit or miss
+            // ipv4_forward;
+            // send_to_cpu;
+        }
+        size = 64;
+        default_action = NoAction();
+    }
+
+    //***** LAYER 2 *****//
+
+    action set_mac_addrs() {
+        hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
+        hdr.ethernet.dstAddr = next_hop_mac_addr;
+    }
+
+    action set_egr_spec(port_t port){
+        standard.metadata.egress_spec = port;
+    }
+
+    //***** ARP *****//
+
+    action arp_match(EthAddr_t dstMacAddr){
+        next_hop_mac_addr = dstMacAddr;
+    }
+
+    table arp_table {
+        key = {
+            next_hop_ip_addr: exact;
+            //hdr.ipv4.dstAddr: exact;
+        }
+        actions = {
+            arp_match;
+            NoAction;
+        }
+        size = 64;
+        default_action = NoAction();
+    }
+
+    // table L2_forward {
+    //     key = {
+    //         hdr.ethernet.dstAddr: exact;
+    //     }
+    //     actions = {
+    //         set_egr_spec;
+    //         drop;
+    //         NoAction;
+    //     }
+    //     size = 64;
+    //     default_action = drop();
+    // }
+
+
+////////////////////////////////////////////
+    action arp_reply(EtherAddr_t dstAddr) {
+        hdr.arp.opCode = ARP_REPLY; // update op code, request to reply
+        hdr.arp.dstMac = hdr.arp.srcMac; // reply ARP pkt destination = source addr
+        hdr.arp.srcMac = dstAddr; // destination MAC address from request 
+        hdr.arp.srcIP = hdr.arp.dstIP; //reply packet destination IP addr = request source IP addr
+
+        // ethernet header updates
+        hdr.ethernet.dstAddr = hdr.ethernet.srcAddr;
+        hdr.ethernet.srcAddr = dstAddr;
+
+        // sending back to same port 
+        standard_metadata.egress_spec = standard_metadata.ingress_port;
+
+    }
+
+    action l2_forward(egressSpec_t port) {
+        standard_metadata.egress_spec = port;
+    }
+
+    // action arp_hit(EthAddr_t dstMacAddr) {
+    //     hdr.ethernet.dstAddr = dstMacAddr;
+    // }
+
+    table arp_cache_table {
+        key = {
+            hdr.arp.dstIP : exact; // destination IP addr = key for finding matching MAC addr
+        }
+        actions = {
+            arp_reply;
+            drop;
+        }
+        size = 1024;
+        default_action = drop();
+    }
+
+
+    table l2forward_exact {
+        key = {
+            hdr.ethernet.dstAddr: exact;
+        }
+        actions = {
+            l2_forward;
+            drop;
+            NoAction;
+        }
+        size = 1024;
+        default_action = NoAction();
+    }
 
     apply {
         // TODO: Define your control flow
-        routing_table.apply();
+        //routing_table.apply();
+        
+        // if (hdr.ipv4.isValid()) {
+        //     if (hdr.ipv4.ttl <= 1) {
+        //         drop();
+        //     }
+        //     else {
+        //         hdr.ipv4.ttl = hdr.ipv4.ttl -1;
+        //     }
+        //     if(!local_ip_table.apply().hit) {
+        //         routing_table.apply();
+        //     }
+        //     if(standard_metadata.egress_spec != CPU_PORT) {
+        //         arp_table.apply();
+        //         set_mac_addrs();
+        //     }
+        // }
+        // else if (hdr.ethernet.isValid()) {
+        //     forward_L2.apply();
+        // }
+        // else {
+        //     send_to_cp();
+        // }
+
+        if (hdr.ipv4.isValid()) {
+            if (local_ip_table.apply().hit) {
+                send_to_cpu(DIG_LOCAL_IP); // if address found in local ip table --> sent to CP
+            }
+            else if(!routing_table.apply().hit) {
+                send_to_cpu(DIG_NO_ROUTE); // if route not found in routing table
+            }
+            else {
+                if(!arp_cache_table.apply().hit) {
+                    send_to_cpu(DIG_ARP_MISS); // check if no ARP match in local ARP Cache table
+                }
+                else {
+                    hdr.ipv4.ttl = hdr.ipv4.ttl -1;
+                    if (hdr.ipv4.ttl==0) {
+                        send_to_cpu(DIG_TTL_EXCEEDED);
+                    }
+                }
+            }
+        }
+
+        else if(hdr.arp.isValid()) {
+            if (hdr.arp.opCode == ARP_REQ) {
+                send_to_cpu(DIG_ARP_REPLY);
+            // } else if (hdr.arp.opCode == ARP_REQ) {
+            //     // do something
+            // }
+        }
+
+        else {
+            drop();
+        }
+
+
+    
+    
+        if (hdr.ethernet.isValid() && hdr.ipv4.isValid()) {
+            l2forward_exact.apply(); // layer 2 switching - sending to port with destination mac
+        }
+        else if (hdr.ethernet.etherType == ARP_TYPE) {
+            arp_cache_table.apply();
+        }
+        else {
+            drop();
+        }
+        }
     }
 }
 
+/*************************************************************************
+***********************  D E P A R S E R  *******************************
+*************************************************************************/
+
 // Deparser Implementation
-control MyDeparser(packet_out b,
-                    in Parsed_packet p) {
+control MyDeparser(packet_out pkt,
+                    in Parsed_packet hdr) {
     apply {
         // TODO: Emit other headers you've defined
-        b.emit(p.digest);
-        b.emit(p.ethernet);
-        b.emit(p.ipv4)
+        pkt.emit(hdr.digest);
+        pkt.emit(hdr.ethernet);
+        pkt.emit(hdr.ipv4);
+        pkt.emit(hdr.arp);
     }
 }
+
+/*************************************************************************
+****************  E G R E S S   P R O C E S S I N G   *******************
+*************************************************************************/
 
 control MyEgress(inout Parsed_packet hdr,
                  inout user_metadata_t meta,
                  inout standard_metadata_t standard_metadata) {
     apply { }
 }
+
+/*************************************************************************
+*************   C H E C K S U M    C O M P U T A T I O N   **************
+*************************************************************************/
 
 control MyComputeChecksum(inout Parsed_packet hdr, inout user_metadata_t meta) {
     apply {
@@ -188,6 +454,10 @@ control MyComputeChecksum(inout Parsed_packet hdr, inout user_metadata_t meta) {
             HashAlgorithm.csum16);
     }
 }
+
+/*************************************************************************
+***********************  S W I T C H  *******************************
+*************************************************************************/
 
 // Instantiate the switch
 V1Switch(

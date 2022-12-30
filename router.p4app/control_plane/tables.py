@@ -225,6 +225,8 @@ class Tables_populator():
         TODO
         E.g., self.api.table_cam_add_entry(TABLE_NAME, match_fields={...}, action_name='...', action_params={...})
         """
+        for iface in ifaces:
+            self.api.table_cam_add_entry(table_name='MyIngress.local_ip_table',keys={'hdr.ipv4.dstAddr':iface.ip}, action_name='MyIngress.send_to_cpu',action_data=DIG_LOCAL_IP})
         pass
 
 
@@ -239,6 +241,7 @@ class Tables_populator():
         TODO
         E.g., self.api.table_lpm_load_dataset(RTABLE_NAME, rtable)
         """
+        self.api.table_lpm_load_dataset(RTABLE_NAME, rtable)
         pass
 
     """
@@ -252,3 +255,5 @@ class Tables_populator():
         TODO
         E.g., self.api.table_cam_add_entry(TABLE_NAME, match_fields={...}, action_name='...', action_params={...})
         """
+        for arp in arp_cache:
+            self.api.table_cam_add_entry(ARP_CACHE_TABLE_NAME, keys={'hdr.arp.dstIP':arp[0]},action_name='MyIngress.arp_reply',action_data=arp[1])
