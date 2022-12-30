@@ -114,7 +114,7 @@ parser MyParser(packet_in pkt,
                  inout standard_metadata_t standard_metadata) {
     // TODO: Parse any additional headers that you add
     state start {
-        tranistion parse_ethernet;
+        transition parse_ethernet;
     }
 
     state parse_ethernet {
