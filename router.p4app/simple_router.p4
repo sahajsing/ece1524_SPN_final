@@ -204,8 +204,8 @@ control MyIngress(inout Parsed_packet p,
     action ipv4_forward(port_t port, IPv4Addr_t next_hop) {
         // routing table action params = egress port, next hop addr
         standard_metadata.egress_spec = port;
-        // p.ip.dstAddr = next_hop;
-        next_hop_ip_addr = next_hop;
+        p.ip.dstAddr = next_hop;
+        // next_hop_ip_addr = next_hop;
     }
 
     // TODO: Is this what the routing table is supposed to look like?
