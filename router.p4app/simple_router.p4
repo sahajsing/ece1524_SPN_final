@@ -223,11 +223,14 @@ control MyIngress(inout Parsed_packet p,
         default_action = NoAction();
     }
 
+    // action local_ip_hit
+
     table local_ip_table {
         key = {
             p.ip.dstAddr: exact;
         }
         actions = {
+            send_to_cpu;
             NoAction; // hit or miss
             // ipv4_forward;
             // send_to_cpu;
