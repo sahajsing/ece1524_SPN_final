@@ -95,7 +95,7 @@ struct Parsed_packet {
     Ethernet_h ethernet;
     digest_header_h digest;
     ARP_h arp;
-    IPv4_h ipv4;
+    IPv4_h ip;
 }
 
 // user defined metadata: can be used to shared information between
@@ -141,7 +141,7 @@ parser MyParser(packet_in b,
     }    
 
     state parse_ipv4 {
-        b.extract(p.ipv4);
+        b.extract(p.ip);
         transition accept;
     }
 }
@@ -153,19 +153,19 @@ parser MyParser(packet_in b,
 control MyVerifyChecksum(inout Parsed_packet p, inout user_metadata_t meta) {
     apply {
         // TODO: Verify the IPv4 checksum
-        verify_checksum(p.ipv4.isValid(),
-            { p.ipv4.version,
-                p.ipv4.ihl,
-                p.ipv4.diffserv,
-                p.ipv4.totalLen,
-                p.ipv4.identification,
-                p.ipv4.flags,
-                p.ipv4.fragOffset,
-                p.ipv4.ttl,
-                p.ipv4.protocol,
-                p.ipv4.srcAddr,
-                p.ipv4.dstAddr},
-            p.ipv4.hdrChecksum, HashAlgorithm.csum16);
+        verify_checksum(p.ip.isValid(),
+            { p.ip.version,
+                p.ip.ihl,
+                p.ip.diffserv,
+                p.ip.totalLen,
+                p.ip.identification,
+                p.ip.flags,
+                p.ip.fragOffset,
+                p.ip.ttl,
+                p.ip.protocol,
+                p.ip.srcAddr,
+                p.ip.dstAddr},
+            p.ip.hdrChecksum, HashAlgorithm.csum16);
     }
 }
 
@@ -204,7 +204,7 @@ control MyIngress(inout Parsed_packet p,
     action ipv4_forward(port_t port, IPv4Addr_t next_hop) {
         // routing table action params = egress port, next hop addr
         standard_metadata.egress_spec = port;
-        // p.ipv4.dstAddr = next_hop;
+        // p.ip.dstAddr = next_hop;
         next_hop_ip_addr = next_hop;
     }
 
@@ -212,7 +212,7 @@ control MyIngress(inout Parsed_packet p,
     
     table routing_table {
         key = {
-            p.ipv4.dstAddr: lpm; // ternary?
+            p.ip.dstAddr: lpm; // ternary?
         }
         actions = {
             ipv4_forward;
@@ -225,7 +225,7 @@ control MyIngress(inout Parsed_packet p,
 
     table local_ip_table {
         key = {
-            p.ipv4.dstAddr: exact;
+            p.ip.dstAddr: exact;
         }
         actions = {
             NoAction; // hit or miss
@@ -256,7 +256,7 @@ control MyIngress(inout Parsed_packet p,
     // table arp_table {
     //     key = {
     //         next_hop_ip_addr: exact;
-    //         //p.ipv4.dstAddr: exact;
+    //         //p.ip.dstAddr: exact;
     //     }
     //     actions = {
     //         arp_match;
@@ -329,12 +329,12 @@ control MyIngress(inout Parsed_packet p,
         // TODO: Define your control flow
         //routing_table.apply();
         
-        // if (p.ipv4.isValid()) {
-        //     if (p.ipv4.ttl <= 1) {
+        // if (p.ip.isValid()) {
+        //     if (p.ip.ttl <= 1) {
         //         drop();
         //     }
         //     else {
-        //         p.ipv4.ttl = p.ipv4.ttl -1;
+        //         p.ip.ttl = p.ip.ttl -1;
         //     }
         //     if(!local_ip_table.apply().hit) {
         //         routing_table.apply();
@@ -351,7 +351,7 @@ control MyIngress(inout Parsed_packet p,
         //     send_to_cp();
         // }
 
-        if (p.ipv4.isValid()) {
+        if (p.ip.isValid()) {
             if (local_ip_table.apply().hit) {
                 send_to_cpu(DIG_LOCAL_IP); // if address found in local ip table --> sent to CP
             }
@@ -363,8 +363,8 @@ control MyIngress(inout Parsed_packet p,
                     send_to_cpu(DIG_ARP_MISS); // check if no ARP match in local ARP Cache table
                 }
                 else {
-                    p.ipv4.ttl = p.ipv4.ttl -1;
-                    if (p.ipv4.ttl==0) {
+                    p.ip.ttl = p.ip.ttl -1;
+                    if (p.ip.ttl==0) {
                         send_to_cpu(DIG_TTL_EXCEEDED);
                     }
                 }
@@ -387,7 +387,7 @@ control MyIngress(inout Parsed_packet p,
 
     
     
-        // if (p.ethernet.isValid() && p.ipv4.isValid()) {
+        // if (p.ethernet.isValid() && p.ip.isValid()) {
         //     l2forward_exact.apply(); // layer 2 switching - sending to port with destination mac
         // }
         // else if (p.ethernet.etherType == ARP_TYPE) {
@@ -411,7 +411,7 @@ control MyDeparser(packet_out b,
         // TODO: Emit other headers you've defined
         b.emit(p.digest);
         b.emit(p.ethernet);
-        b.emit(p.ipv4);
+        b.emit(p.ip);
         b.emit(p.arp);
     }
 }
@@ -434,19 +434,19 @@ control MyComputeChecksum(inout Parsed_packet p, inout user_metadata_t meta) {
     apply {
         // TODO: compute the IPv4 checksum
         update_checksum(
-            p.ipv4.isValid(),
-            { p.ipv4.version,
-              p.ipv4.ihl,
-              p.ipv4.diffserv,
-              p.ipv4.totalLen,
-              p.ipv4.identification,
-              p.ipv4.flags,
-              p.ipv4.fragOffset,
-              p.ipv4.ttl,
-              p.ipv4.protocol,
-              p.ipv4.srcAddr,
-              p.ipv4.dstAddr },
-            p.ipv4.hdrChecksum,
+            p.ip.isValid(),
+            { p.ip.version,
+              p.ip.ihl,
+              p.ip.diffserv,
+              p.ip.totalLen,
+              p.ip.identification,
+              p.ip.flags,
+              p.ip.fragOffset,
+              p.ip.ttl,
+              p.ip.protocol,
+              p.ip.srcAddr,
+              p.ip.dstAddr },
+            p.ip.hdrChecksum,
             HashAlgorithm.csum16);
     }
 }
