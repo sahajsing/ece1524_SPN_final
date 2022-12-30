@@ -86,7 +86,7 @@ header IPv4_h {
  */
 // Digest header
 header digest_header_h {
-    bit<8>   src_port;
+    bit<16>   src_port;
     bit<8>   digest_code;
 }
 
@@ -190,7 +190,7 @@ control MyIngress(inout Parsed_packet hdr,
     }
 
     action send_to_cpu(digCode_t DIG_CODE){
-        hdr.digest.src_port = standard_metadata.ingress_port; // source port is ingress port packet arrived on
+        hdr.digest.src_port = (bit<16>)standard_metadata.ingress_port; // source port is ingress port packet arrived on
         standard_metadata.egress_spec = CPU_PORT; // send to control plane
         hdr.digest.digest_code = DIG_CODE;
     }
