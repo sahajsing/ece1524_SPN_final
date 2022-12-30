@@ -108,7 +108,7 @@ struct user_metadata_t {
 *************************************************************************/
 
 // Parser Implementation
-parser MyParser(packet_in pkt,
+parser MyParser(packet_in b,
                  out Parsed_packet p,
                  inout user_metadata_t user_metadata,
                  inout standard_metadata_t standard_metadata) {
@@ -118,7 +118,7 @@ parser MyParser(packet_in pkt,
     }
 
     state parse_ethernet {
-        pkt.extract(p.ethernet);
+        b.extract(p.ethernet);
         transition select(p.ethernet.etherType){
             ARP_TYPE : parse_arp;
             // DIGEST_TYPE : parse_digest;
@@ -128,12 +128,12 @@ parser MyParser(packet_in pkt,
     }
 
     // state parse_digest {
-    //     pkt.extract(p.digest);
+    //     b.extract(p.digest);
     //     transition accept;
     // }
     
     state parse_arp {
-        pkt.extract(p.arp);
+        b.extract(p.arp);
         transition select(p.arp.opCode) {
             ARP_REQ: accept;
             ARP_REPLY: accept;
@@ -141,7 +141,7 @@ parser MyParser(packet_in pkt,
     }    
 
     state parse_ipv4 {
-        pkt.extract(p.ipv4);
+        b.extract(p.ipv4);
         transition accept;
     }
 }
@@ -283,7 +283,7 @@ control MyIngress(inout Parsed_packet p,
 ////////////////////////////////////////////
     action arp_match(EthAddr_t dstAddr) {
         p.arp.opCode = ARP_REPLY; // update op code, request to reply
-        p.arp.dstMac = p.arp.srcMac; // reply ARP pkt destination = source addr
+        p.arp.dstMac = p.arp.srcMac; // reply ARP b destination = source addr
         p.arp.srcMac = dstAddr; // destination MAC address from request 
         p.arp.srcIP = p.arp.dstIP; //reply packet destination IP addr = request source IP addr
 
@@ -405,14 +405,14 @@ control MyIngress(inout Parsed_packet p,
 *************************************************************************/
 
 // Deparser Implementation
-control MyDeparser(packet_out pkt,
+control MyDeparser(packet_out b,
                     in Parsed_packet p) {
     apply {
         // TODO: Emit other headers you've defined
-        pkt.emit(p.digest);
-        pkt.emit(p.ethernet);
-        pkt.emit(p.ipv4);
-        pkt.emit(p.arp);
+        b.emit(p.digest);
+        b.emit(p.ethernet);
+        b.emit(p.ipv4);
+        b.emit(p.arp);
     }
 }
 
