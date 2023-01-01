@@ -257,6 +257,5 @@ class Tables_populator():
         E.g., self.api.table_cam_add_entry(TABLE_NAME, match_fields={...}, action_name='...', action_params={...})
         """
         for arp in arp_cache:
-            # self.api.table_cam_add_entry(ARP_CACHE_TABLE_NAME, keys={'p.arp.dstIP':arp[0]},action_name='MyIngress.arp_match',action_data={'dstAddr':arp[1]})
             self.api.table_cam_add_entry(ARP_CACHE_TABLE_NAME, match_fields={'p.arp.dstIP':arp[0]},\
-                action_name='MyIngress.arp_match',action_data={'dstAddr':arp[1]})
+                action_name='MyIngress.arp_match',action_params={'dstAddr':arp[1]})
