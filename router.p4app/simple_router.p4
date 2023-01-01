@@ -121,16 +121,10 @@ parser MyParser(packet_in b,
         b.extract(p.ethernet);
         transition select(p.ethernet.etherType){
             ARP_TYPE : parse_arp;
-            // DIGEST_TYPE : parse_digest;
             IP_TYPE : parse_ipv4;
             default : accept;
         }
     }
-
-    // state parse_digest {
-    //     b.extract(p.digest);
-    //     transition accept;
-    // }
     
     state parse_arp {
         b.extract(p.arp);
@@ -202,10 +196,8 @@ control MyIngress(inout Parsed_packet p,
     }
 
     action ipv4_forward(port_t port, IPv4Addr_t next) {
-        // routing table action params = egress port, next hop addr
         standard_metadata.egress_spec = port;
         p.ip.dstAddr = next;
-        // next_hop_ip_addr = next_hop;
     }
 
     // TODO: Is this what the routing table is supposed to look like?
@@ -216,24 +208,21 @@ control MyIngress(inout Parsed_packet p,
         }
         actions = {
             ipv4_forward;
-            // send_to_cpu;
             NoAction;
         }
         size = 64;
         default_action = NoAction();
     }
 
-    // action local_ip_hit
 
     table local_ip_table {
         key = {
             p.ip.dstAddr: exact;
         }
         actions = {
+            ipv4_forward;
             send_to_cpu;
             NoAction; // hit or miss
-            // ipv4_forward;
-            // send_to_cpu;
         }
         size = 64;
         default_action = NoAction();
@@ -241,16 +230,6 @@ control MyIngress(inout Parsed_packet p,
 
     //***** LAYER 2 *****//
 
-    action set_mac_addrs() {
-        p.ethernet.srcAddr = p.ethernet.dstAddr;
-        p.ethernet.dstAddr = next_hop_mac_addr;
-    }
-
-    action set_egr_spec(port_t port){
-        standard_metadata.egress_spec = port;
-    }
-
-////////////////////////////////////////////
     action arp_match(EthAddr_t dstAddr) {
         p.arp.opCode = ARP_REPLY; // update op code, request to reply
         p.arp.dstMac = p.arp.srcMac; // reply ARP b destination = source addr
@@ -265,8 +244,6 @@ control MyIngress(inout Parsed_packet p,
         standard_metadata.egress_spec = standard_metadata.ingress_port;
 
     }
-
-
 
     table arp_cache_table {
         key = {
@@ -283,113 +260,53 @@ control MyIngress(inout Parsed_packet p,
 
     apply {
         // TODO: Define your control flow
-        //routing_table.apply();
-        
-        // if (p.ip.isValid()) {
-        //     if (p.ip.ttl <= 1) {
-        //         drop();
-        //     }
-        //     else {
-        //         p.ip.ttl = p.ip.ttl -1;
-        //     }
-        //     if(!local_ip_table.apply().hit) {
-        //         routing_table.apply();
-        //     }
-        //     if(standard_metadata.egress_spec != CPU_PORT) {
-        //         arp_table.apply();
-        //         set_mac_addrs();
-        //     }
-        // }
-        // else if (p.ethernet.isValid()) {
-        //     forward_L2.apply();
-        // }
-        // else {
-        //     send_to_cp();
-        // }
 
         if (p.ip.isValid()) {
+            if (p.ip.ttl <=1) {
+                send_to_cpu(DIG_TTL_EXCEEDED);
+                drop();
+            } else {
+                p.ip.ttl = p.ip.ttl-1;
+            }
+
             if (!local_ip_table.apply().hit) {
-                // send_to_cpu(DIG_LOCAL_IP); // if address found in local ip table --> sent to CP
-                if (!routing_table.apply().hit){
+                if(!routing_table.apply().hit){
                     send_to_cpu(DIG_NO_ROUTE);
                 }
-            }
-            else {
-                if(!arp_cache_table.apply().hit) {
-                    send_to_cpu(DIG_ARP_MISS); // check if no ARP match in local ARP Cache table
-                }
-                else {
-                    p.ip.ttl = p.ip.ttl -1;
-                    if (p.ip.ttl==0) {
-                        send_to_cpu(DIG_TTL_EXCEEDED);
-                    }
+                else if (!arp_cache_table.apply().hit){
+                    send_to_cpu(DIG_ARP_MISS);
                 }
             }
-        }
 
-        else if(p.arp.isValid()) {
-            if (p.arp.opCode == ARP_REQ) {
+            if (p.arp.isValid() && p.arp.opCode == ARP_REQ) {
                 send_to_cpu(DIG_ARP_REPLY);
             }
         }
 
-        else {
-            drop();
-        }
-
-    
-
         // if (p.ip.isValid()) {
-        //     if (p.ip.ttl <= 1) {
-        //         drop();
-        //     }
-        //     else {
-        //         p.ip.ttl = p.ip.ttl - 1;
-        //     }
-        //     if(local_ip_table.apply().hit) {
-        //         send_to_cpu(DIG_LOCAL_IP);
-        //     }
-        //     else {
+        //     if (!local_ip_table.apply().hit) {
+        //         // send_to_cpu(DIG_LOCAL_IP); // if address found in local ip table --> sent to CP
         //         if (!routing_table.apply().hit){
         //             send_to_cpu(DIG_NO_ROUTE);
         //         }
-        //         else{
-        //             if (p)
-        //         }
         //     }
-        //     if (standard_matadata.egress_spec != CPU_PORT){
-
-        //     }
-        // }
-        // srcMac = p.ethernet.srcAddr;
-        // dstMac = p.ethernet.dstAddr;
-        // iport = standard_matadata.ingress_port;
-
-        // if (p.ip.isValid()){
-        //     if(!local_ip_table.apply().hit){
-        //         if(!routing_table.apply().hit){
-        //             send_to_cpu(DIG_NO_ROUTE);
+        //     else {
+        //         if(!arp_cache_table.apply().hit) {
+        //             send_to_cpu(DIG_ARP_MISS); // check if no ARP match in local ARP Cache table
         //         }
         //         else {
-        //             if (!arp_cache_table.apply().hit) {
-        //                 send_to_cpu(DIG_ARP_MISS);
-        //             }
-        //             else {
-        //                 p.ip.ttl = p.ip.ttl - 1;
-        //                 if (p.ip.ttl == 0) {
-        //                     send_to_cpu(DIG_TTL_EXCEEDED);
-        //                 }
+        //             p.ip.ttl = p.ip.ttl -1;
+        //             if (p.ip.ttl==0) {
+        //                 send_to_cpu(DIG_TTL_EXCEEDED);
         //             }
         //         }
         //     }
         // }
-        // else if (p.arp.isValid()) {
-        // if (p.arp.opCode == ARP_REPLY) {
+
+        // else if(p.arp.isValid()) {
+        //     if (p.arp.opCode == ARP_REQ) {
         //         send_to_cpu(DIG_ARP_REPLY);
         //     }
-        // }
-        // else {
-        //     drop();
         // }
     }
 }
