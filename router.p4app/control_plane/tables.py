@@ -226,7 +226,7 @@ class Tables_populator():
         E.g., self.api.table_cam_add_entry(TABLE_NAME, match_fields={...}, action_name='...', action_params={...})
         """
         # for iface in ifaces:
-        self.api.table_cam_add_entry(table_name='MyIngress.local_ip_table',match_fields={'p.ip.dstAddr':iface.ip},\
+        self.api.table_cam_add_entry(table_name='MyIngress.local_ip_table',match_fields={'p.ip.dstAddr':ifaces.ip},\
                  action_name='MyIngress.send_to_cpu',action_params={'DIG_CODE':DIG_LOCAL_IP})
         #pass
 
