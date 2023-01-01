@@ -100,7 +100,11 @@ class Control_plane(Thread):
             return
         
         elif (DIG_CODE == DIG_NO_ROUTE):
-            # find route 
+            # find route through PWOSPF
+            if PWOSPF in pkt:
+                if pkt[PWOSPF].version != 2: return
+
+                self.pwospf_handler.handle_pkt(pkt, self.ifaces)
             return
         
         elif (DIG_CODE == DIG_TTL_EXCEEDED):

@@ -79,9 +79,6 @@ class PWOSPF_handler():
                 neighbor[1] = updated_Time
 
 
-
-
-
     def handle_hello(self,pkt,ingress_iface):
         # verify mask and helloint of HELLO pkt match receiving iface
         if pkt[HELLO].mask != ingress_iface.mask: return
